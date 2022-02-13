@@ -8,65 +8,72 @@ defmodule Server do
 
 # _________________________________________________________ Server.start()
 def start(config, server_num) do
+
   config = config
     |> Configuration.node_info("Server", server_num)
     |> Debug.node_starting()
 
   receive do
   { :BIND, servers, databaseP } ->
-    State.initialise(config, server_num, servers, databaseP)
+    State.initialise(config, server_num, self(), servers, databaseP)
       |> Timer.restart_election_timer()
       |> Server.next()
   end # receive
 end # start
 
 # _________________________________________________________ next()
+@spec next(atom | %{:curr_election => any, :curr_term => any, optional(any) => any}) :: any
 def next(s) do
-  s = s |> Server.execute_committed_entries()
+  # s = s |> Server.execute_committed_entries()
 
   curr_term = s.curr_term                          # used to discard old messages
   curr_election = s.curr_election                  # used to discard old election timeouts
 
   s = receive do
 
-  # ________________________________________________________
-  { :APPEND_ENTRIES_REQUEST, mterm, m } when mterm < curr_term -> # Reject send Success=false and newer term in reply
-    s |> Debug.message("-areq", "stale #{mterm} #{inspect m}")
-      |> AppendEntries.send_entries_reply_to_leader(m.leaderP, false)
 
   # ________________________________________________________
   { :VOTE_REQUEST, mterm, m } when mterm < curr_term ->     # Reject, send votedGranted=false and newer_term in reply
     s |> Debug.message("-vreq", "stale #{mterm} #{inspect m}")
-      |> Vote.send_vote_reply_to_candidate(m.candidateP, false)
+      |> Vote.send_vote_reply_to_candidate(m, false)
+
+  { :HEART_BEAT, mterm, _m } when mterm < curr_term ->
+    s |> Debug.message("-hbeat", "stale #{mterm}")
+
+  { :HEART_BEAT, mterm, _m } ->
+    s |> Debug.message("-hbeat", "non_stale stale #{mterm}")
+      |> Timer.restart_election_timer()
 
   # ________________________________________________________
   { _mtype, mterm, _m } = msg when mterm < curr_term ->     # Discard any other stale messages
     s |> Debug.received("stale #{inspect msg}")
 
-  # ________________________________________________________
-  { :APPEND_ENTRIES_REQUEST, mterm, m } = msg ->            # Leader >> All
-    s |> Debug.message("-areq", msg)
-      |> AppendEntries.receive_append_entries_request_from_leader(mterm, m)
+#  { :APPEND_ENTRIES_REQUEST, mterm, m } when mterm < curr_term -> # Reject send Success=false and newer term in reply
+#  s |> Debug.message("-areq", "stale #{mterm} #{inspect m}")
+#   |> AppendEntries.send_entries_reply_to_leader(m.leaderP, false)
 
-  { :APPEND_ENTRIES_REPLY, mterm, m } = msg ->              # Follower >> Leader
-    s |> Debug.message("-arep", msg)
-      |> AppendEntries.receive_append_entries_reply_from_follower(mterm, m)
+  # { :APPEND_ENTRIES_REQUEST, mterm, m } = msg ->            # Leader >> All
+  #   s |> Debug.message("-areq", msg)
+  #     |> AppendEntries.receive_append_entries_request_from_leader(mterm, m)
 
-  { :APPEND_ENTRIES_TIMEOUT, _mterm, followerP } = msg ->   # Leader >> Leader
+  # { :APPEND_ENTRIES_REPLY, mterm, m } = msg ->              # Follower >> Leader
+  #   s |> Debug.message("-arep", msg)
+  #     |> AppendEntries.receive_append_entries_reply_from_follower(mterm, m)
+
+  { :APPEND_ENTRIES_TIMEOUT, mterm } = msg ->   # Leader >> Leader
     s |> Debug.message("-atim", msg)
-      |> AppendEntries.receive_append_entries_timeout(followerP)
+      |> AppendEntries.receive_append_entries_timeout(mterm)
 
   # ________________________________________________________
-  { :VOTE_REQUEST, mterm, m } = msg ->                      # Candidate >> All
-    s |> Debug.message("-vreq", msg)
+  { :VOTE_REQUEST, mterm, m } ->                      # Candidate >> All
+    s |> Debug.message("-vreq", {m.selfP, m.server_num})
       |> Vote.receive_vote_request_from_candidate(mterm, m)
 
-  { :VOTE_REPLY, mterm, m } = msg ->                        # Follower >> Candidate
-    if m.election < curr_election do
-      s |> Debug.received("Discard Reply to old Vote Request #{inspect msg}")
+  { :VOTE_REPLY, mterm, m } ->                        # Follower >> Candidate
+    if m.curr_election < curr_election do
+      s |> Debug.received("Discard Reply to old Vote Request #{inspect m.selfP}, #{mterm}")
     else
-      s |> Debug.message("-vrep", msg)
-        |> Vote.receive_vote_reply_from_follower(mterm, m)
+      s |> Vote.receive_vote_reply_from_follower(mterm, m)
     end # if
 
   # ________________________________________________________
@@ -92,8 +99,8 @@ def next(s) do
   Server.next(s)
 end # next
 
-
-"""  Omitted
+"""
+Ommited
 def follower_if_higher(s, mterm) do
 def become_follower(s, mterm) do
 def become_candidate(s) do

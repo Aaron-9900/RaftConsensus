@@ -12,16 +12,36 @@ def lpad(line_num),   do: String.pad_leading("#{line_num}", 4, "0")
 def rpad(role),       do: String.pad_trailing("#{role}", 9)
 def tpad(term),       do: String.pad_leading("#{term}", 3, "0")
 def node_prefix(c),   do: "#{c.node_name}@#{c.node_location}"
+@spec server_prefix(
+        atom
+        | %{
+            :config => atom | %{:line_num => any, optional(any) => any},
+            :curr_term => any,
+            :role => any,
+            :server_num => any,
+            optional(any) => any
+          }
+      ) :: <<_::64, _::_*8>>
 def server_prefix(s), do: "server#{s.server_num}-#{lpad(s.config.line_num)} role=#{rpad(s.role)} term=#{tpad(s.curr_term)}"
-def map(m),           do: (for {k, v} <- m, into: "" do "\n\t#{kpad(k)}\t#{inspect v}" end) 
+def map(m),           do: (for {k, v} <- m, into: "" do "\n\t#{kpad(k)}\t#{inspect v}" end)
 
-def option?(c, option, level), do: 
+def option?(c, option, level), do:
   String.contains?(c.debug_options, option) and c.debug_level >= level
 
 def mapstr(c, mapname, mapvalue, level), do:
   (if Debug.option?(c, "a", level) do "#{mapname} = #{map(mapvalue)}" else "" end)
 
 # _________________________________________________________ Debug.message()
+@spec message(
+        atom
+        | %{
+            :config => atom | %{:debug_options => binary, optional(any) => any},
+            optional(any) => any
+          },
+        binary | [binary] | :binary.cp(),
+        any,
+        any
+      ) :: atom | %{:config => atom | map, optional(any) => any}
 def message(s, option, message, level \\ 1) do
   unless Debug.option?(s.config, option, level) do s else
     s = inc_line_num(s)

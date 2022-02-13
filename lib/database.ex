@@ -12,13 +12,13 @@ def balances(d, i, v), do: Map.put(d, :balances, Map.put(d.balances, i, v))
 
 # _________________________________________________________ Database.start()
 def start(config, db_num) do
-  receive do 
-  { :BIND, serverP } -> 
+  receive do
+  { :BIND, serverP } ->
     d = %{                          # initialise database state variables
-      config:   config, 
-      db_num:   db_num, 
+      config:   config,
+      db_num:   db_num,
       serverP:  serverP,
-      seqnum:   0, 
+      seqnum:   0,
       balances: Map.new,
     }
     Database.next(d)
@@ -28,10 +28,10 @@ end # start
 # _________________________________________________________ Database.next()
 def next(d) do
   receive do
-  { :DB_REQUEST, client_request } ->  
+  { :DB_REQUEST, client_request } ->
     { :MOVE, amount, account1, account2 } = client_request.cmd
 
-    d = Database.seqnum(d, d.seqnum+1) 
+    d = Database.seqnum(d, d.seqnum+1)
 
     balance1 = Map.get(d.balances, account1, 0)
     balance2 = Map.get(d.balances, account2, 0)
@@ -50,8 +50,7 @@ end # next
 
 def send_reply_to_server(d, db_result) do
   send d.serverP, { :DB_REPLY, db_result }
-  d 
+  d
 end # send_reply_to_server
 
 end # Database
-

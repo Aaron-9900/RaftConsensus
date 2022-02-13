@@ -8,6 +8,11 @@ defmodule ClientReq do
 
 # omitted
 
+@spec receive_request_from_client(atom | %{:servers => any, optional(any) => any}, any) :: no_return
+def receive_request_from_client(s, m) do
+  for server <- s.servers do
+    send server, {:APPEND_ENTRIES_REQUEST, m}
+  end
+end
+
 end # Clientreq
-
-

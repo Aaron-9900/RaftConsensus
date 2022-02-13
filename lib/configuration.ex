@@ -26,6 +26,21 @@ def node_init() do
   config |> Map.merge(Configuration.params(config.setup))
 end # node_init
 
+def node_test do
+  config =
+    %{
+      node_suffix:    0,
+      raft_timelimit: 0,
+      debug_level:    0,
+      debug_options:  "",
+      n_servers:      1,
+      n_clients:      0,
+      election_timeout_range:  10..20, # timeout(ms) for election, set randomly in range
+      append_entries_timeout:  5,       # timeout(ms) for the reply to a append_entries request
+    }
+    config
+end
+
 # _________________________________________________________ node_info()
 def node_info(config, node_type, node_num \\ "") do
   Map.merge config,
@@ -49,7 +64,7 @@ def params :default do
     client_request_interval: 5,        # interval(ms) between client requests
     client_reply_timeout:    500,      # timeout(ms) for the reply to a client request
 
-    election_timeout_range:  100..200, # timeout(ms) for election, set randomly in range
+    election_timeout_range:  1000..2000, # timeout(ms) for election, set randomly in range
     append_entries_timeout:  10,       # timeout(ms) for the reply to a append_entries request
 
     monitor_interval:        500,      # interval(ms) between monitor summaries

@@ -7,17 +7,17 @@ defmodule State do
 # s = server process state (c.f. self/this)
 
 # _________________________________________________________ State.initialise()
-def initialise(config, server_num, servers, databaseP) do
+def initialise(config, server_num, self_pid, servers, databaseP) do
   # initialise state variables for server
   %{
     # _____________________constants _______________________
 
     config:       config,             # system configuration parameters (from Helper module)
     server_num:	  server_num,         # server num (for debugging)
-    selfP:        self(),             # server's process id
+    selfP:        self_pid,             # server's process id
     servers:      servers,            # list of process id's of servers
-    num_servers:  length(servers),    # no. of servers
-    majority:     div(length(servers),2) + 1,  # cluster membership changes are not supported in this implementation
+    num_servers:  config.n_servers,    # no. of servers
+    majority:     div(config.n_servers,2) + 1,  # cluster membership changes are not supported in this implementation
 
     databaseP:    databaseP,          # local database - used to send committed entries for execution
 
@@ -27,7 +27,7 @@ def initialise(config, server_num, servers, databaseP) do
     voted_for:	     nil,            # num of candidate that been granted vote incl self
     voted_by:        MapSet.new,     # set of processes that have voted for candidate incl. candidate
 
-    append_entries_timers: Map.new,   # one timer for each follower
+    append_entries_timer: nil,   # one timer for each follower
 
     leaderP:        nil,	     # included in reply to client request
 
@@ -59,8 +59,8 @@ def vote_tally(s),        do: MapSet.size(s.voted_by)
 
 def append_entries_timers(s),
                           do: Map.put(s, :append_entries_timers, Map.new)
-def append_entries_timer(s, i, v),
-                          do: Map.put(s, :append_entries_timers, Map.put(s.append_entries_timers, i, v))
+def append_entries_timer(s, v),
+                          do: Map.put(s, :append_entries_timer, v)
 
 
 def curr_term(s, v),      do: Map.put(s, :curr_term, v)
