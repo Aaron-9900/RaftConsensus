@@ -24,7 +24,7 @@ end # start
 # _________________________________________________________ next()
 @spec next(atom | %{:curr_election => any, :curr_term => any, optional(any) => any}) :: any
 def next(s) do
-  # s = s |> Server.execute_committed_entries()
+  # s = s |> Server.execute_committed_entries()
 
   curr_term = s.curr_term                          # used to discard old messages
   curr_election = s.curr_election                  # used to discard old election timeouts
@@ -33,15 +33,14 @@ def next(s) do
 
 
   # ________________________________________________________
-  { :VOTE_REQUEST, mterm, m } when mterm < curr_term ->     # Reject, send votedGranted=false and newer_term in reply
-    s |> Debug.message("-vreq", "stale #{mterm} #{inspect m}")
-      |> Vote.send_vote_reply_to_candidate(m, false)
 
   { :HEART_BEAT, mterm, _m } when mterm < curr_term ->
     s |> Debug.message("-hbeat", "stale #{mterm}")
 
-  { :HEART_BEAT, mterm, _m } ->
+  { :HEART_BEAT, mterm, m } ->
     s |> Debug.message("-hbeat", "non_stale stale #{mterm}")
+      |> State.leaderP(m.selfP)
+      |> State.curr_term(mterm)
       |> Timer.restart_election_timer()
 
   # ________________________________________________________
@@ -52,21 +51,32 @@ def next(s) do
 #  s |> Debug.message("-areq", "stale #{mterm} #{inspect m}")
 #   |> AppendEntries.send_entries_reply_to_leader(m.leaderP, false)
 
-  # { :APPEND_ENTRIES_REQUEST, mterm, m } = msg ->            # Leader >> All
-  #   s |> Debug.message("-areq", msg)
-  #     |> AppendEntries.receive_append_entries_request_from_leader(mterm, m)
+  { :APPEND_ENTRIES_REQUEST, mterm, m } ->            # Leader >> All
+    s |> Debug.message("-areq", m)
+      |> AppendEntries.receive_append_entries_request_from_leader(mterm, m)
 
-  # { :APPEND_ENTRIES_REPLY, mterm, m } = msg ->              # Follower >> Leader
-  #   s |> Debug.message("-arep", msg)
-  #     |> AppendEntries.receive_append_entries_reply_from_follower(mterm, m)
+  { :APPEND_ENTRIES_REPLY, mterm, m } ->              # Follower >> Leader
+    s |> AppendEntries.receive_append_entries_reply_from_follower(mterm, m)
+      # |> Server.execute_committed_entries()
 
-  { :APPEND_ENTRIES_TIMEOUT, mterm } = msg ->   # Leader >> Leader
+  { :APPEND_ENTRIES_TIMEOUT, mterm, followerP } = msg ->   # Leader >> Leader
     s |> Debug.message("-atim", msg)
-      |> AppendEntries.receive_append_entries_timeout(mterm)
+      |> AppendEntries.receive_append_entries_timeout(mterm, followerP)
+
+    { :DB_REPLY, {:OK, m} } ->
+      s |> ClientReq.reply_to_client_with_result(m)
+        |> Debug.message("-drep", m)
+
 
   # ________________________________________________________
+
+  { :VOTE_REQUEST, mterm, m } when mterm < curr_term ->     # Reject, send votedGranted=false and newer_term in reply
+  s |> Debug.message("-vreq", "stale #{mterm} #{inspect m}")
+    |> Vote.send_vote_reply_to_candidate(m, false)
+
   { :VOTE_REQUEST, mterm, m } ->                      # Candidate >> All
     s |> Debug.message("-vreq", {m.selfP, m.server_num})
+      |> State.leaderP(nil)
       |> Vote.receive_vote_request_from_candidate(mterm, m)
 
   { :VOTE_REPLY, mterm, m } ->                        # Follower >> Candidate
@@ -105,7 +115,6 @@ def follower_if_higher(s, mterm) do
 def become_follower(s, mterm) do
 def become_candidate(s) do
 def become_leader(s) do
-def execute_committed_entries(s) do
 """
 
 end # Server

@@ -40,7 +40,7 @@ def next(d) do
     d = Database.balances(d, account2, balance2 - amount)
 
     d |> Monitor.send_msg({ :DB_MOVE, d.db_num, d.seqnum, client_request.cmd })
-      |> Database.send_reply_to_server(:OK)
+      |> Database.send_reply_to_server({ :OK, client_request })
       |> Database.next()
 
   unexpected ->

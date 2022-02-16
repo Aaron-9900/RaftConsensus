@@ -60,7 +60,7 @@ def params :default do
     max_amount:              1_000,    # max amount moved between accounts in a single transaction
 
     client_timelimit:        60_000,   # clients stops sending requests after this time(ms)
-    max_client_requests:     1,        # maximum no of requests each client will attempt
+    max_client_requests:     5,        # maximum no of requests each client will attempt
     client_request_interval: 5,        # interval(ms) between client requests
     client_reply_timeout:    500,      # timeout(ms) for the reply to a client request
 
@@ -82,6 +82,10 @@ end # params :default
 def params :slower do              # settingsto slow timing
   Map.merge (params :default),
   %{
+    client_request_interval: 500,        # interval(ms) between client requests
+    client_reply_timeout:    1000,      # timeout(ms) for the reply to a client request
+    election_timeout_range:  1000..2000, # timeout(ms) for election, set randomly in range
+    append_entries_timeout:  100,       # timeout(ms) for the reply to a append_entries request
   }
 end # params :slower
 

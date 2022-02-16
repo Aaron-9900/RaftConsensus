@@ -36,9 +36,9 @@ def start(config,  :cluster_start) do
   end # for
 
   # create 1 client in each client_node and bind to servers
-  # for num <- 1 .. config.n_clients do
-  #   Node.spawn(:'client#{num}_#{config.node_suffix}', Client, :start, [config, num, servers])
-  # end # for
+  for num <- 1 .. config.n_clients do
+    Node.spawn(:'client#{num}_#{config.node_suffix}', Client, :start, [config, num, servers])
+  end # for
 end # start
 
 end # Raft

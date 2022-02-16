@@ -62,13 +62,6 @@ def send_vote_reply_to_candidate(s, m, value) do
   s |> Debug.message("+vrep", {s.server_num, m.server_num, value})
 end
 
-def send_heartbeat(s) do
-  for peer <- s.servers do
-    send peer, { :HEART_BEAT, s.curr_term, s }
-  end
-  s
-end
-
 def receive_vote_request_from_candidate(s, _mterm, m) do
   if s.curr_election == m.curr_election && Vote.should_not_vote? s, m do
     Vote.send_vote_reply_to_candidate(s, m, false)
@@ -92,9 +85,25 @@ def receive_vote_reply_from_follower(s, _mterm, m) do
   end
 end
 
+def initialize_multiple_timers(s, peers) when length(peers) == 1 do
+    s |>  Timer.restart_append_entries_timer(hd(peers))
+end
+
+def initialize_multiple_timers(s, peers) do
+  s |> Vote.restart_append_entries_timer_if_not_self(hd(peers))
+    |> Vote.initialize_multiple_timers(tl(peers))
+end
+
+def restart_append_entries_timer_if_not_self(s, peer) do
+  if s.selfP != peer do
+    s |> Timer.restart_append_entries_timer(peer)
+  else
+    s
+  end
+end
 def initialize_heartbeat_timer(s) do
   if s.role == :LEADER do
-    s |>  Timer.restart_append_entries_timer()
+    s |>  Vote.initialize_multiple_timers(s.servers)
   else
     s
   end
@@ -106,8 +115,8 @@ def maybe_leader(s) do
   if State.vote_tally(s) > s.majority do
     s |> Vote.role(:LEADER)
       |> Vote.leader(s.selfP)
+      |> Timer.cancel_election_timer()
       |> Vote.increase_curr_term()
-      |> Vote.send_heartbeat()
   else
     s
   end
