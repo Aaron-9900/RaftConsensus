@@ -35,8 +35,8 @@ def node_test do
       debug_options:  "",
       n_servers:      1,
       n_clients:      0,
-      election_timeout_range:  10..20, # timeout(ms) for election, set randomly in range
-      append_entries_timeout:  5,       # timeout(ms) for the reply to a append_entries request
+      election_timeout_range:  100..200, # timeout(ms) for election, set randomly in range
+      append_entries_timeout:  90,       # timeout(ms) for the reply to a append_entries request
     }
     config
 end
@@ -61,11 +61,11 @@ def params :default do
 
     client_timelimit:        60_000,   # clients stops sending requests after this time(ms)
     max_client_requests:     5,        # maximum no of requests each client will attempt
-    client_request_interval: 5,        # interval(ms) between client requests
+    client_request_interval: 150,        # interval(ms) between client requests
     client_reply_timeout:    500,      # timeout(ms) for the reply to a client request
 
-    election_timeout_range:  1000..2000, # timeout(ms) for election, set randomly in range
-    append_entries_timeout:  10,       # timeout(ms) for the reply to a append_entries request
+    election_timeout_range:  200..300, # timeout(ms) for election, set randomly in range
+    append_entries_timeout:  100,       # timeout(ms) for the reply to a append_entries request
 
     monitor_interval:        500,      # interval(ms) between monitor summaries
 

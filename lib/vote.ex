@@ -86,7 +86,7 @@ def receive_vote_reply_from_follower(s, _mterm, m) do
 end
 
 def initialize_multiple_timers(s, peers) when length(peers) == 1 do
-    s |>  Timer.restart_append_entries_timer(hd(peers))
+    s |> Vote.restart_append_entries_timer_if_not_self(hd(peers))
 end
 
 def initialize_multiple_timers(s, peers) do
@@ -94,6 +94,8 @@ def initialize_multiple_timers(s, peers) do
     |> Vote.initialize_multiple_timers(tl(peers))
 end
 
+@spec restart_append_entries_timer_if_not_self(atom | %{:selfP => any, optional(any) => any}, any) ::
+        atom | map
 def restart_append_entries_timer_if_not_self(s, peer) do
   if s.selfP != peer do
     s |> Timer.restart_append_entries_timer(peer)
@@ -103,7 +105,7 @@ def restart_append_entries_timer_if_not_self(s, peer) do
 end
 def initialize_heartbeat_timer(s) do
   if s.role == :LEADER do
-    s |>  Vote.initialize_multiple_timers(s.servers)
+    s |> Vote.initialize_multiple_timers(s.servers)
   else
     s
   end

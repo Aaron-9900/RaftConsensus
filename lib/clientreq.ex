@@ -43,7 +43,10 @@ def reply_with_leader(s, m) do
 end
 
 def reply_to_client_with_result(s, m) do
-  send m.clientP, { :CLIENT_REPLY, m.cid, true, s.selfP }
+  if s.role == :LEADER do
+    send m.clientP, { :CLIENT_REPLY, m.cid, true, s.selfP }
+    s |> Debug.message("+crep", m)
+  end
   s
 end
 

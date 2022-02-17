@@ -52,8 +52,7 @@ def next(s) do
 #   |> AppendEntries.send_entries_reply_to_leader(m.leaderP, false)
 
   { :APPEND_ENTRIES_REQUEST, mterm, m } ->            # Leader >> All
-    s |> Debug.message("-areq", m)
-      |> AppendEntries.receive_append_entries_request_from_leader(mterm, m)
+    s |> AppendEntries.receive_append_entries_request_from_leader(mterm, m)
 
   { :APPEND_ENTRIES_REPLY, mterm, m } ->              # Follower >> Leader
     s |> AppendEntries.receive_append_entries_reply_from_follower(mterm, m)
@@ -65,7 +64,6 @@ def next(s) do
 
     { :DB_REPLY, {:OK, m} } ->
       s |> ClientReq.reply_to_client_with_result(m)
-        |> Debug.message("-drep", m)
 
 
   # ________________________________________________________
@@ -99,6 +97,9 @@ def next(s) do
     s |> Debug.message("-creq", msg)
       |> ClientReq.receive_request_from_client(m)
 
+  { :STOP, time } -> # For testing purposes
+    s |> Server.stop_sleep(time)
+
   # { :DB_RESULT, _result } when false -> # don't process DB_RESULT here
 
   unexpected ->
@@ -116,5 +117,10 @@ def become_follower(s, mterm) do
 def become_candidate(s) do
 def become_leader(s) do
 """
+
+def stop_sleep(s, time) do
+  Process.sleep(time)
+  s
+end
 
 end # Server
