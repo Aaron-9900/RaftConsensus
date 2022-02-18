@@ -41,6 +41,10 @@ def initialise(config, server_num, self_pid, servers, databaseP) do
 
     next_index:   Map.new,            # foreach follower, index of follower's last known entry+1
     match_index:  Map.new,            # index of highest entry known to be replicated at a follower
+
+    # -------------------TESTING----------------
+    processed_requests: 0,
+    kill_timer: nil
   }
 end # initialise
 
@@ -57,6 +61,7 @@ def new_voted_by(s),      do: Map.put(s, :voted_by, MapSet.new)
 def add_to_voted_by(s, v),do: Map.put(s, :voted_by, MapSet.put(s.voted_by, v))
 def vote_tally(s),        do: MapSet.size(s.voted_by)
 
+def kill_timer(s, t), do: Map.put(s, :kill_timer, t)
 def append_entries_timers(s),
                           do: Map.put(s, :append_entries_timers, Map.new)
 def append_entries_timer(s, i, v),
@@ -75,6 +80,7 @@ def next_index(s, i, v),  do: Map.put(s, :next_index, Map.put(s.next_index, i, v
 def match_index(s, v),    do: Map.put(s, :match_index, v)
 def match_index(s, i, v), do: Map.put(s, :match_index, Map.put(s.match_index, i, v))
 
+def processed_requests(s, v), do: Map.put(s, :processed_requests, v)
 
 def init_next_index(s) do
   v = Log.last_index(s)+1

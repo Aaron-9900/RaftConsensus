@@ -17,6 +17,7 @@ def start(config, server_num) do
   { :BIND, servers, databaseP } ->
     State.initialise(config, server_num, self(), servers, databaseP)
       |> Timer.restart_election_timer()
+      |> Timer.reset_kill_timer()
       |> Server.next()
   end # receive
 end # start
@@ -28,20 +29,7 @@ def next(s) do
 
   curr_term = s.curr_term                          # used to discard old messages
   curr_election = s.curr_election                  # used to discard old election timeouts
-
   s = receive do
-
-
-  # ________________________________________________________
-
-  { :HEART_BEAT, mterm, _m } when mterm < curr_term ->
-    s |> Debug.message("-hbeat", "stale #{mterm}")
-
-  { :HEART_BEAT, mterm, m } ->
-    s |> Debug.message("-hbeat", "non_stale stale #{mterm}")
-      |> State.leaderP(m.selfP)
-      |> State.curr_term(mterm)
-      |> Timer.restart_election_timer()
 
   # ________________________________________________________
   { _mtype, mterm, _m } = msg when mterm < curr_term ->     # Discard any other stale messages
@@ -73,7 +61,7 @@ def next(s) do
     |> Vote.send_vote_reply_to_candidate(m, false)
 
   { :VOTE_REQUEST, mterm, m } ->                      # Candidate >> All
-    s |> Debug.message("-vreq", {m.selfP, m.server_num})
+    s |> Debug.message("-vreq", {m.selfP, m.server_num, s.curr_election, m.curr_election, m.log})
       |> State.leaderP(nil)
       |> Vote.receive_vote_request_from_candidate(mterm, m)
 
@@ -97,8 +85,8 @@ def next(s) do
     s |> Debug.message("-creq", msg)
       |> ClientReq.receive_request_from_client(m)
 
-  { :STOP, time } -> # For testing purposes
-    s |> Server.stop_sleep(time)
+  { :STOP } -> # For testing purposes
+    s |> Server.kill_server()
 
   # { :DB_RESULT, _result } when false -> # don't process DB_RESULT here
 
@@ -121,6 +109,23 @@ def become_leader(s) do
 def stop_sleep(s, time) do
   Process.sleep(time)
   s
+end
+def flush() do
+  receive do
+          _ -> flush()
+  after
+          0 -> nil
+  end
+end
+def kill_server(s) do
+  s = s |> State.processed_requests(0)
+    |> Debug.message("-died", "Process #{s.server_num} died")
+    |> Timer.cancel_all_append_entries_timers()
+  Process.sleep(Enum.random(s.config.die_after_time))
+  flush()
+  s |> Timer.reset_kill_timer()
+    |> Debug.message("+died", "Process #{s.server_num} revived")
+
 end
 
 end # Server

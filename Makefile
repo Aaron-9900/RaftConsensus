@@ -3,15 +3,17 @@
 # coursework, raft 
 # Makefile, v1
 
-SERVERS   = 3      	
-CLIENTS   = 0      	
+SERVERS   = 5      	
+CLIENTS   = 3
+
+DIE_AFTER = 2
 
 TIMELIMIT = 15000	# quits after milli-seconds(ms)
 SETUP     = default	# one of default, slower, faster, etc
 
 # AppendEntries(areq, arep, atim), Vote(vreq, vrep, vall), Election(etim), DB(dreq, drep), Client(creq, crep)
 # Prefixes + for send/send_after,  - for receive
-DEBUG_OPTIONS = "+areq -areq +arep -arep -creq +crep +drep +dreq"
+DEBUG_OPTIONS = "-vreq +vreq +vrep +areq -areq +arep -arep -creq +crep +drep +dreq -died +died"
 
 DEBUG_LEVEL   = 1
 
@@ -29,7 +31,7 @@ NODE_SUFFIX := ${SECS}_${LOGNAME}@${HOST}
 ELIXIR  := elixir --no-halt --cookie ${COOKIE} --name
 MIX 	:= -S mix run -e ${START} \
 	${NODE_SUFFIX} ${TIMELIMIT} ${DEBUG_LEVEL} ${DEBUG_OPTIONS} \
-	${SERVERS} ${CLIENTS} ${SETUP}
+	${SERVERS} ${CLIENTS} ${SETUP} ${DIE_AFTER}
 	
 MIX_TEST = mix test
 
@@ -48,7 +50,7 @@ run cluster: compile
 	@ ${ELIXIR} client3_${NODE_SUFFIX} ${MIX} cluster_wait &
 	@ ${ELIXIR} client4_${NODE_SUFFIX} ${MIX} cluster_wait &
 	@ ${ELIXIR} client5_${NODE_SUFFIX} ${MIX} cluster_wait &
-	@sleep 1
+	@sleep 5
 	@ ${ELIXIR} raft_${NODE_SUFFIX} ${MIX} cluster_start
 compile:
 	mix compile

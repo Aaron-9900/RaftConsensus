@@ -13,11 +13,30 @@ def receive_request_from_client(s, m) do
   if s.role == :LEADER do
     s |> Log.append_entry(Map.put(m, :term, s.curr_term))
       |> ClientReq.send_request_to_monitor()
+      |> State.processed_requests(s.processed_requests + 1)
   else
     s |> ClientReq.reply_with_leader(m)
   end
 end
 
+@spec send_request_to_monitor(
+        atom
+        | %{
+            :config =>
+              atom
+              | %{:monitorP => atom | pid | port | reference | {atom, atom}, optional(any) => any},
+            :server_num => any,
+            optional(any) => any
+          }
+      ) ::
+        atom
+        | %{
+            :config =>
+              atom
+              | %{:monitorP => atom | pid | port | reference | {atom, atom}, optional(any) => any},
+            :server_num => any,
+            optional(any) => any
+          }
 def send_request_to_monitor(s) do
   send s.config.monitorP, { :CLIENT_REQUEST, s.server_num }
   s

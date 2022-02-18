@@ -43,11 +43,16 @@ def mapstr(c, mapname, mapvalue, level), do:
         any
       ) :: atom | %{:config => atom | map, optional(any) => any}
 def message(s, option, message, level \\ 1) do
-  unless Debug.option?(s.config, option, level) do s else
-    s = inc_line_num(s)
-    IO.puts "#{server_prefix(s)} #{option} #{inspect message}"
+  if !Map.get(s, :test, false) do
+      unless Debug.option?(s.config, option, level) do s else
+        s = inc_line_num(s)
+        IO.puts "#{server_prefix(s)} #{option} #{inspect message}"
+        s
+      end # unless
+  else
     s
-  end # unless
+  end
+
 end # message
 
 # _________________________________________________________ Debug.received()

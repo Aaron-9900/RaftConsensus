@@ -39,12 +39,12 @@ end
 
  def receive_append_entries_request_from_leader(s, mterm, m) do
    s = cond do
-      mterm > s.curr_term ->
+      mterm >= s.curr_term ->
          State.curr_term(s, mterm)
             |> State.leaderP(m.leaderP)
             |> State.role(:FOLLOWER)
             |> State.voted_for(nil)
-      mterm <= s.curr_term -> s
+      mterm < s.curr_term -> s
    end
 
    if Enum.count(m.entries) > 0 do
@@ -61,11 +61,13 @@ end
     s |> AppendEntries.append_entries_if_valid(m, mterm, valid_operation)
       |> AppendEntries.commit_leader_entries(m.leader_commit)
       |> AppendEntries.send_append_entries_reply(m, valid_operation)
+      |> Timer.restart_election_timer()
  end
 
  def commit_leader_entries(s, commit_to) do
    if commit_to > s.commit_index do
       for i <- (s.commit_index + 1)..(commit_to) do
+         s |> Debug.message("+dreq",  { :DB_REQUEST, Log.entry_at(s, i), s.commit_index, commit_to, s.log })
          send s.databaseP, { :DB_REQUEST, Log.entry_at(s, i) }
       end
       s |> State.commit_index(commit_to)
@@ -75,11 +77,26 @@ end
  end
 
  def append_entries_if_valid(s, m, _mterm, valid) do
-   if valid && Enum.count(m.entries) > 0 do
-      Enum.reduce(m.entries, s, fn(entry, acc) ->
-         {_, value} = entry
-         Log.append_entry(acc, value)
-      end)
+   s = if Enum.count(m.entries) > 0 && Log.last_index(s) > m.sent_from_idx - 1 do
+      if Log.last_term(s) != m.entries[m.sent_from_idx].term do
+         s |> Log.delete_entries_from(m.sent_from_idx)
+      else
+         s
+      end
+   else
+      s
+   end
+
+   if valid && Enum.count(m.entries) > 0 && Enum.count(m.entries) + m.sent_from_idx - 1 > Log.last_index(s) do
+      for entry <- m.entries, reduce: s do
+         acc ->
+            {idx, value} = entry
+            if Log.entry_at(acc, idx) == nil do
+                  Log.append_entry(acc, value)
+            else
+               acc
+            end
+      end
    else
       s
    end
@@ -91,17 +108,18 @@ end
          s |> State.curr_term(mterm)
            |> State.role(:FOLLOWER)
            |> State.voted_for(nil)
+           |> State.new_voted_by()
            |> Debug.message("-arep", "Older term. Stepping down as leader")
       mterm == s.curr_term && s.role == :LEADER && m.result ->
          s  |> State.next_index(m.sender.selfP, m.ack)
             |> Debug.message("-arep", "Correct reply received")
             |> AppendEntries.commit_entries()
-      mterm == s.curr_term && s.role == :LEADER && !m.result && s.next_index[m.sender.selfP] > 0->
+      mterm == s.curr_term && s.role == :LEADER && !m.result && s.next_index[m.sender.selfP] > 0 ->
          s  |> State.next_index(m.sender.selfP, s.next_index[m.sender.selfP] - 1)
-            |> AppendEntries.send_append_entries_request(mterm, s.sender.selfP)
-            |> Debug.message("-arep", "Retrying: client log is older. Sending next index at: #{s.next_index[m.sender.selfP]}")
+            |> AppendEntries.send_append_entries_request(mterm, m.sender.selfP)
+            |> Debug.message("-arep", "Retrying: server #{m.sender.server_num} log is older. Sending next index at: #{s.next_index[m.sender.selfP]}")
 
-      true -> s |> Debug.message("-arep", "Error -- no condition met in append entries reply")
+      true -> s |> Debug.message("-arep", "Error -- no condition met in append entries reply: mterm: #{mterm}, curr_term: #{s.curr_term}")
    end
  end
 

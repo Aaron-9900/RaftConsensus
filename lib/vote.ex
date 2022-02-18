@@ -25,11 +25,21 @@ def voted_by(s, v), do: Map.put(s, :voted_by, MapSet.put(s.voted_by, v))
 @spec is_leader(atom | %{:leaderP => any, :selfP => any, optional(any) => any}) :: boolean
 def is_leader(s), do: s.leaderP == s.selfP
 
+def new_voted_by(s),      do: Map.put(s, :voted_by, MapSet.new)
+
 def increase_curr_term(s), do: Map.put(s, :curr_term, s.curr_term + 1)
 
-# voted for someone OR (I'm a candidate AND I'm not voting for myself)
-@spec should_not_vote?(any, atom | %{:voted_for => any, optional(any) => any}) :: boolean
-def should_not_vote?(s, m), do: s.voted_for != nil || (s.role == :CANDIDATE && s.selfP != m.selfP)
+# invalid log AND (voted for someone OR (I'm a candidate AND I'm not voting for myself))
+def should_not_vote?(s, m) do
+  valid_log = cond do
+    Log.last_term(m) > Log.last_term(s) ->
+      true
+    Log.last_term(m) == Log.last_term(s) && Log.last_index(s) <= Log.last_index(m) ->
+      true
+    true -> false
+  end
+  !valid_log || (s.voted_for != nil || (s.role == :CANDIDATE && s.selfP != m.selfP))
+end
 
 
 # ... omitted
@@ -41,19 +51,20 @@ def should_not_vote?(s, m), do: s.voted_for != nil || (s.role == :CANDIDATE && s
         optional(any) => any
       }) :: atom | %{:config => atom | map, optional(any) => any}
 def receive_election_timeout(s) do
-  msg = { :VOTE_REQUEST, s.curr_term, Map.put(s, :curr_election, s.curr_election + 1)}
-  for server <- s.servers do
-    send server, msg
-  end
-  s |> Vote.curr_election(s.curr_election + 1)
+  s = s |> Vote.curr_election(s.curr_election + 1)
     |> Vote.voted_for(nil)
     |> Vote.role(:CANDIDATE)
-    |> Vote.voted_by(MapSet.new)
+    |> Vote.new_voted_by()
     |> Timer.restart_election_timer()
     |> Debug.message("+vreq", { :VOTE_REQUEST, s.curr_term, %{
       election: s.curr_election + 1,
       candidate_number: s.server_num # For debug only
       } })
+  msg = { :VOTE_REQUEST, s.curr_term, Map.put(s, :curr_election, s.curr_election)}
+      for server <- s.servers do
+        send server, msg
+      end
+  s
 end
 
 @spec send_vote_reply_to_candidate(any, atom | pid | port | reference | {atom, atom}, any) :: any
@@ -62,26 +73,40 @@ def send_vote_reply_to_candidate(s, m, value) do
   s |> Debug.message("+vrep", {s.server_num, m.server_num, value})
 end
 
-def receive_vote_request_from_candidate(s, _mterm, m) do
+def change_role_if_not_self(s, m) do
+  cond do
+    s.selfP == m.selfP -> s
+    s.selfP != m.selfP -> s |> Vote.role(m, :FOLLOWER)
+  end
+end
+
+def receive_vote_request_from_candidate(s, mterm, m) do
   if s.curr_election == m.curr_election && Vote.should_not_vote? s, m do
     Vote.send_vote_reply_to_candidate(s, m, false)
   else
     s |> Vote.curr_election(m.curr_election)
       |> Vote.voted_for(m.selfP)
-      |> Vote.role(m, :FOLLOWER)
+      |> State.curr_term(mterm)
+      |> Vote.change_role_if_not_self(m)
       |> Vote.send_vote_reply_to_candidate(m, true)
       |> Timer.restart_election_timer()
   end
 end
 
-def receive_vote_reply_from_follower(s, _mterm, m) do
-  if !MapSet.member?(s.voted_by, m.selfP) && m.value do
-    s |> Vote.voted_by(m.selfP)
-      |> Vote.maybe_leader()
-      |> Vote.initialize_heartbeat_timer()
-      |> Debug.message("-vrep", {s.server_num, m.server_num,  State.vote_tally(s)})
-  else
-    s
+def receive_vote_reply_from_follower(s, mterm, m) do
+  cond do
+    !MapSet.member?(s.voted_by, m.selfP) && m.value && mterm == s.curr_term ->
+      s |> Vote.voted_by(m.selfP)
+        |> Vote.maybe_leader()
+        |> Vote.initialize_heartbeat_timer()
+        |> Debug.message("-vrep", {s.server_num, m.server_num,  State.vote_tally(s)})
+    mterm > s.curr_term ->
+      s |> State.curr_term(mterm)
+        |> State.role(:FOLLOWER)
+        |> State.voted_for(nil)
+        |> Vote.new_voted_by()
+        |> Timer.restart_election_timer()
+    true -> s
   end
 end
 
@@ -111,10 +136,8 @@ def initialize_heartbeat_timer(s) do
   end
 end
 
-@spec maybe_leader(atom | %{:majority => any, :voted_by => map, optional(any) => any}) ::
-        atom | map
 def maybe_leader(s) do
-  if State.vote_tally(s) > s.majority do
+  if State.vote_tally(s) >= s.majority do
     s |> Vote.role(:LEADER)
       |> Vote.leader(s.selfP)
       |> Timer.cancel_election_timer()
