@@ -11,51 +11,35 @@ defmodule ClientReq do
 @spec receive_request_from_client(atom | %{:servers => any, optional(any) => any}, any) :: no_return
 def receive_request_from_client(s, m) do
   if s.role == :LEADER do
-    s |> Log.append_entry(Map.put(m, :term, s.curr_term))
-      |> ClientReq.send_request_to_monitor()
-      |> State.processed_requests(s.processed_requests + 1)
+    s |> ClientReq.append_entry_if_new(m)
   else
     s |> ClientReq.reply_with_leader(m)
   end
 end
 
-@spec send_request_to_monitor(
-        atom
-        | %{
-            :config =>
-              atom
-              | %{:monitorP => atom | pid | port | reference | {atom, atom}, optional(any) => any},
-            :server_num => any,
-            optional(any) => any
-          }
-      ) ::
-        atom
-        | %{
-            :config =>
-              atom
-              | %{:monitorP => atom | pid | port | reference | {atom, atom}, optional(any) => any},
-            :server_num => any,
-            optional(any) => any
-          }
+def append_entry_if_new(s, m) do
+  {client, id} = m.cid
+  cond do
+    s.seen_client_requests[client] == nil ->
+      s |> State.create_client_seen_set(client)
+        |> State.seen_client_requests(client, id)
+        |> Log.append_entry(Map.put(m, :term, s.curr_term))
+        |> ClientReq.send_request_to_monitor()
+        |> State.processed_requests(s.processed_requests + 1)
+    !MapSet.member?(s.seen_client_requests[client], id) ->
+      s |> State.seen_client_requests(client, id)
+        |> Log.append_entry(Map.put(m, :term, s.curr_term))
+        |> ClientReq.send_request_to_monitor()
+        |> State.processed_requests(s.processed_requests + 1)
+     true -> s
+    end
+end
+
 def send_request_to_monitor(s) do
   send s.config.monitorP, { :CLIENT_REQUEST, s.server_num }
   s
 end
 
-@spec reply_with_leader(
-        atom
-        | %{
-            :config => atom | %{:debug_options => binary, optional(any) => any},
-            :leaderP => any,
-            optional(any) => any
-          },
-        atom
-        | %{
-            :cid => any,
-            :clientP => atom | pid | port | reference | {atom, atom},
-            optional(any) => any
-          }
-      ) :: atom | %{:config => atom | map, optional(any) => any}
 def reply_with_leader(s, m) do
   send m.clientP, { :CLIENT_REPLY, m.cid, :NOT_LEADER, s.leaderP }
   s |> Debug.message("+creq", { :CLIENT_REPLY, m.cid, :NOT_LEADER, s.leaderP })

@@ -62,14 +62,14 @@ def params :default do
 
     client_timelimit:        60_000,   # clients stops sending requests after this time(ms)
     max_client_requests:     10,        # maximum no of requests each client will attempt
-    client_request_interval: 150,        # interval(ms) between client requests
-    client_reply_timeout:    500,      # timeout(ms) for the reply to a client request
+    client_request_interval: 40,        # interval(ms) between client requests
+    client_reply_timeout:    80,      # timeout(ms) for the reply to a client request
 
-    election_timeout_range:  200..250, # timeout(ms) for election, set randomly in range
-    append_entries_timeout:  100,       # timeout(ms) for the reply to a append_entries request
-    die_after_time:          400..800,
-    die_after:               300..2000,
-    monitor_interval:        500,      # interval(ms) between monitor summaries
+    election_timeout_range:  40..80, # timeout(ms) for election, set randomly in range
+    append_entries_timeout:  10,       # timeout(ms) for the reply to a append_entries request
+    die_after_time:          40..100,
+    die_after:               100..500,
+    monitor_interval:        200,      # interval(ms) between monitor summaries
 
     crash_servers: %{		       # server_num => crash_after_time (ms), ..
       3 => 10_000,

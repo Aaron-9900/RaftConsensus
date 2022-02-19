@@ -41,6 +41,7 @@ def initialise(config, server_num, self_pid, servers, databaseP) do
 
     next_index:   Map.new,            # foreach follower, index of follower's last known entry+1
     match_index:  Map.new,            # index of highest entry known to be replicated at a follower
+    seen_client_requests: Map.new,
 
     # -------------------TESTING----------------
     processed_requests: 0,
@@ -60,7 +61,8 @@ def voted_for(s, v),      do: Map.put(s, :voted_for, v)
 def new_voted_by(s),      do: Map.put(s, :voted_by, MapSet.new)
 def add_to_voted_by(s, v),do: Map.put(s, :voted_by, MapSet.put(s.voted_by, v))
 def vote_tally(s),        do: MapSet.size(s.voted_by)
-
+def create_client_seen_set(s, c), do: Map.put(s, :seen_client_requests, Map.put(s.seen_client_requests, c, MapSet.new))
+def seen_client_requests(s, c, v), do: Map.put(s, :seen_client_requests, Map.put(s.seen_client_requests, c, MapSet.put(s.seen_client_requests[c], v)))
 def kill_timer(s, t), do: Map.put(s, :kill_timer, t)
 def append_entries_timers(s),
                           do: Map.put(s, :append_entries_timers, Map.new)

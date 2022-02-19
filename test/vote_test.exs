@@ -58,11 +58,11 @@ defmodule VoteTest do
     assert m.selfP == node2
     assert m.role == :FOLLOWER
   end
-
+  @tag :wip
   test "should not vote candidate if already candidate", state do
     config = state.config |> Map.put(:n_servers, 3)
     node1 = spawn(Server, :start, [Map.put(config, :election_timeout_range, 80..81), 1])
-    send node1, {:BIND, [self()], nil}
+    send node1, {:BIND, [self(), node1], nil}
 
     assert_receive {:VOTE_REQUEST, _mterm, m}, 300
     assert m.selfP == node1
@@ -125,7 +125,7 @@ defmodule VoteTest do
     assert_receive {:VOTE_REQUEST, _mterm, m}, 300
 
   end
-  @tag :wip
+
   test "can gain leadership after losing", state do
     config = state.config |> Map.put(:n_servers, 3)
     node1 = spawn(Server, :start, [Map.put(config, :election_timeout_range, 80..81), 1])

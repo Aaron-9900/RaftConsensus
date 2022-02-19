@@ -29,18 +29,22 @@ def new_voted_by(s),      do: Map.put(s, :voted_by, MapSet.new)
 
 def increase_curr_term(s), do: Map.put(s, :curr_term, s.curr_term + 1)
 
-# invalid log AND (voted for someone OR (I'm a candidate AND I'm not voting for myself))
-def should_not_vote?(s, m) do
-  valid_log = cond do
+def term_valid(s, m) do
+  cond do
+    m.curr_election > s.curr_election -> true
+    m.curr_election == s.curr_election && s.voted_for == nil -> true
+    true -> false
+  end
+end
+def log_valid(s, m) do
+  cond do
     Log.last_term(m) > Log.last_term(s) ->
       true
     Log.last_term(m) == Log.last_term(s) && Log.last_index(s) <= Log.last_index(m) ->
       true
     true -> false
   end
-  !valid_log || (s.voted_for != nil || (s.role == :CANDIDATE && s.selfP != m.selfP))
 end
-
 
 # ... omitted
 @spec receive_election_timeout(%{
@@ -61,9 +65,9 @@ def receive_election_timeout(s) do
       candidate_number: s.server_num # For debug only
       } })
   msg = { :VOTE_REQUEST, s.curr_term, Map.put(s, :curr_election, s.curr_election)}
-      for server <- s.servers do
-        send server, msg
-      end
+  for server <- s.servers do
+    send server, msg
+  end
   s
 end
 
@@ -81,13 +85,13 @@ def change_role_if_not_self(s, m) do
 end
 
 def receive_vote_request_from_candidate(s, mterm, m) do
-  if s.curr_election == m.curr_election && Vote.should_not_vote? s, m do
+  if !Vote.log_valid(s, m) || !Vote.term_valid(s, m) do
     Vote.send_vote_reply_to_candidate(s, m, false)
   else
-    s |> Vote.curr_election(m.curr_election)
+    s |> Vote.change_role_if_not_self(m)
+      |> Vote.curr_election(m.curr_election)
       |> Vote.voted_for(m.selfP)
       |> State.curr_term(mterm)
-      |> Vote.change_role_if_not_self(m)
       |> Vote.send_vote_reply_to_candidate(m, true)
       |> Timer.restart_election_timer()
   end

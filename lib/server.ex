@@ -25,7 +25,7 @@ end # start
 # _________________________________________________________ next()
 @spec next(atom | %{:curr_election => any, :curr_term => any, optional(any) => any}) :: any
 def next(s) do
-  # s = s |> Server.execute_committed_entries()
+  s = s |> AppendEntries.commit_entries()
 
   curr_term = s.curr_term                          # used to discard old messages
   curr_election = s.curr_election                  # used to discard old election timeouts
@@ -97,14 +97,6 @@ def next(s) do
 
   Server.next(s)
 end # next
-
-"""
-Ommited
-def follower_if_higher(s, mterm) do
-def become_follower(s, mterm) do
-def become_candidate(s) do
-def become_leader(s) do
-"""
 
 def stop_sleep(s, time) do
   Process.sleep(time)
