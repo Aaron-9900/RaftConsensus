@@ -4,7 +4,7 @@
 # Makefile, v1
 
 SERVERS   = 5      	
-CLIENTS   = 3
+CLIENTS   = 5
 
 DIE_AFTER = 2
 
@@ -13,7 +13,7 @@ SETUP     = default	# one of default, slower, faster, etc
 
 # AppendEntries(areq, arep, atim), Vote(vreq, vrep, vall), Election(etim), DB(dreq, drep), Client(creq, crep)
 # Prefixes + for send/send_after,  - for receive
-DEBUG_OPTIONS = "-vreq +vreq +vrep +areq -areq +arep -arep -creq +crep +drep +dreq -died +died"
+DEBUG_OPTIONS = ""
 
 DEBUG_LEVEL   = 1
 

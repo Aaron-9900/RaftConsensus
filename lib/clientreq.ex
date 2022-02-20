@@ -20,13 +20,7 @@ end
 def append_entry_if_new(s, m) do
   {client, id} = m.cid
   cond do
-    s.seen_client_requests[client] == nil ->
-      s |> State.create_client_seen_set(client)
-        |> State.seen_client_requests(client, id)
-        |> Log.append_entry(Map.put(m, :term, s.curr_term))
-        |> ClientReq.send_request_to_monitor()
-        |> State.processed_requests(s.processed_requests + 1)
-    !MapSet.member?(s.seen_client_requests[client], id) ->
+    s.seen_client_requests[client] == nil || !MapSet.member?(s.seen_client_requests[client], id) ->
       s |> State.seen_client_requests(client, id)
         |> Log.append_entry(Map.put(m, :term, s.curr_term))
         |> ClientReq.send_request_to_monitor()

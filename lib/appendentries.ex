@@ -33,7 +33,7 @@ def send_append_entries_request(s, mterm, followerP) do
       leader_commit: s.commit_index
    }
    send followerP, {:APPEND_ENTRIES_REQUEST, mterm, msg}
-   s  |> Debug.message("+areq", Map.put(msg, :to, followerP))
+   s  |> Debug.message("+areq", {Map.put(msg, :to, followerP), s.log})
       |> Timer.restart_append_entries_timer(followerP)
 end
 
@@ -48,7 +48,7 @@ end
    end
 
    if Enum.count(m.entries) > 0 do
-      Debug.message(s, "-areq", m)
+      Debug.message(s, "-areq", {m, s.log})
    end
 
    valid_operation = cond do
@@ -59,13 +59,14 @@ end
       true -> false
    end
     s |> AppendEntries.append_entries_if_valid(m, mterm, valid_operation)
-      |> AppendEntries.commit_leader_entries(m.leader_commit)
+      |> AppendEntries.commit_leader_entries(m.leader_commit, valid_operation)
       |> AppendEntries.send_append_entries_reply(m, valid_operation)
       |> Timer.restart_election_timer()
  end
 
- def commit_leader_entries(s, commit_to) do
-   if commit_to > s.commit_index do
+ def commit_leader_entries(s, commit_to, valid) do
+   if commit_to > s.commit_index && valid do
+      Debug.message(s, "+dreqplus", {s.commit_index + 1, commit_to, Log.get_entries(s, (s.commit_index + 1)..commit_to)})
       for i <- (s.commit_index + 1)..(commit_to) do
          s |> Debug.message("+dreq",  { :DB_REQUEST, Log.entry_at(s, i), s.commit_index, commit_to, s.log })
          send s.databaseP, { :DB_REQUEST, Log.entry_at(s, i) }
@@ -78,25 +79,26 @@ end
 
  def append_entries_if_valid(s, m, _mterm, valid) do
    s = if Enum.count(m.entries) > 0 && Log.last_index(s) > m.sent_from_idx - 1 do
-      if Log.last_term(s) != m.entries[m.sent_from_idx].term do
-         s |> Log.delete_entries_from(m.sent_from_idx)
+      tmp = for entry <- m.entries, reduce: [] do
+         acc ->
+         {k, v} = entry
+         if Log.entry_at(s, k) != nil && Log.term_at(s, k) != v.term do
+            [k | acc]
+         else
+            acc
+         end
+      end
+      if Enum.count(tmp) > 0 do
+         s |> Log.delete_entries_from(Enum.min(tmp))
+            |> Debug.message("-areq", "Deleting entries from #{Enum.min(tmp)}")
       else
          s
       end
    else
       s
    end
-
    if valid && Enum.count(m.entries) > 0 && Enum.count(m.entries) + m.sent_from_idx - 1 > Log.last_index(s) do
-      for entry <- m.entries, reduce: s do
-         acc ->
-            {idx, value} = entry
-            if Log.entry_at(acc, idx) == nil do
-                  Log.append_entry(acc, value)
-            else
-               acc
-            end
-      end
+      Log.merge_entries(s, m.entries)
    else
       s
    end
@@ -117,7 +119,7 @@ end
       mterm == s.curr_term && s.role == :LEADER && !m.result && s.next_index[m.sender.selfP] > 0 ->
          s  |> State.next_index(m.sender.selfP, s.next_index[m.sender.selfP] - 1)
             |> AppendEntries.send_append_entries_request(mterm, m.sender.selfP)
-            |> Debug.message("-arep", "Retrying: server #{m.sender.server_num} log is older. Sending next index at: #{s.next_index[m.sender.selfP]}")
+            |> Debug.message("-arep", "Retrying: server #{m.sender.server_num} log is older. Sending next index at: #{s.next_index[m.sender.selfP]}. Log is: #{inspect m.sender.log}")
 
       true -> s |> Debug.message("-arep", "Error -- no condition met in append entries reply: mterm: #{mterm}, curr_term: #{s.curr_term}")
    end
@@ -137,15 +139,16 @@ def max_ready_to_commit(r) do
    end
 end
  def commit_entries(s) do
-   ready = for i <- 0..Log.last_index(s), n_ack_entries(s, i) >= s.majority do
+   ready = for i <- s.commit_index..Log.last_index(s), n_ack_entries(s, i) >= s.majority do
       i
    end
    ready = AppendEntries.max_ready_to_commit(ready)
 
    if ready > 0 && ready > s.commit_index && Log.term_at(s, ready) == s.curr_term do
+      Debug.message(s, "+dreqplus", {s.commit_index + 1, ready, Log.get_entries(s, (s.commit_index + 1)..ready)})
       for i <- (s.commit_index + 1)..ready do
          send s.databaseP, { :DB_REQUEST, Log.entry_at(s, i) }
-         Debug.message(s, "+dreq", Log.entry_at(s, i).cmd)
+         Debug.message(s, "+dreq", {Log.entry_at(s, i).cmd, s.log})
       end
       s |> State.commit_index(ready)
    else
