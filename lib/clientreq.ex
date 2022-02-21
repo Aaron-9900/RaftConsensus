@@ -1,5 +1,5 @@
 
-# distributed algorithms, n.dulay, 8 feb 2022
+# Aaron Hoffman (aah21)
 # coursework, raft consensus, v2
 
 defmodule ClientReq do
@@ -23,10 +23,21 @@ def append_entry_if_new(s, m) do
     s.seen_client_requests[client] == nil || !MapSet.member?(s.seen_client_requests[client], id) ->
       s |> State.seen_client_requests(client, id)
         |> Log.append_entry(Map.put(m, :term, s.curr_term))
+        # |> ClientReq.sleep_if_max_seen()
         |> ClientReq.send_request_to_monitor()
         |> State.processed_requests(s.processed_requests + 1)
      true -> s
     end
+end
+
+def sleep_if_max_seen(s) do
+  if s.processed_requests > s.config.max_requests_to_die do
+    Process.sleep(500)
+    Server.flush()
+    s |> State.processed_requests(0)
+  else
+    s
+  end
 end
 
 def send_request_to_monitor(s) do

@@ -1,5 +1,5 @@
 
-# distributed algorithms, n.dulay, 8 feb 2022
+# Aaron Hoffman (aah21)
 # raft, configuration parameters v2
 
 defmodule Configuration do
@@ -61,16 +61,16 @@ def params :default do
     max_amount:              1_000,    # max amount moved between accounts in a single transaction
 
     client_timelimit:        60_000,   # clients stops sending requests after this time(ms)
-    max_client_requests:     5000,        # maximum no of requests each client will attempt
+    max_client_requests:     1000000,        # maximum no of requests each client will attempt
     client_request_interval: 5,        # interval(ms) between client requests
     client_reply_timeout:    50,      # timeout(ms) for the reply to a client request
 
     election_timeout_range:  100..200, # timeout(ms) for election, set randomly in range
     append_entries_timeout:  10,       # timeout(ms) for the reply to a append_entries request
     die_after_time:          40..100,
-    die_after:               200..800,
+    die_after:               200..700,
     monitor_interval:        1000,      # interval(ms) between monitor summaries
-
+    max_requests_to_die: 3,
     crash_servers: %{		       # server_num => crash_after_time (ms), ..
       3 => 10_000,
       4 => 15_000,

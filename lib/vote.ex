@@ -1,5 +1,5 @@
 
-# distributed algorithms, n.dulay, 8 feb 2022
+# Aaron Hoffman (aah21)
 # coursework, raft consensus, v2
 
 defmodule Vote do
@@ -46,14 +46,6 @@ def log_valid(s, m) do
   end
 end
 
-# ... omitted
-@spec receive_election_timeout(%{
-        :curr_election => number,
-        :curr_term => any,
-        :server_num => any,
-        :servers => any,
-        optional(any) => any
-      }) :: atom | %{:config => atom | map, optional(any) => any}
 def receive_election_timeout(s) do
   s = s |> Vote.curr_election(s.curr_election + 1)
     |> Vote.voted_for(nil)

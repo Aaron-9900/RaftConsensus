@@ -70,6 +70,21 @@ def seen_client_requests(s, c, v) do
   end
   Map.put(s, :seen_client_requests, Map.put(s.seen_client_requests, c, MapSet.put(s.seen_client_requests[c], v)))
 end
+
+def remove_seen_client_requests(s, requests) do
+  for req <- requests, reduce: s do
+    acc ->
+      {_, value} = req
+      {client, id} = value.cid
+      if acc.seen_client_requests[client] == nil do
+        acc
+      else
+        acc |> Map.put(:seen_client_requests,
+                      Map.put(acc.seen_client_requests, client, MapSet.delete(s.seen_client_requests[client], id)))
+      end
+  end
+end
+
 def kill_timer(s, t), do: Map.put(s, :kill_timer, t)
 def append_entries_timers(s),
                           do: Map.put(s, :append_entries_timers, Map.new)

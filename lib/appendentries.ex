@@ -1,5 +1,5 @@
 
-# distributed algorithms, n.dulay, 8 feb 2022
+# Aaron Hoffman (aah21)
 # coursework, raft consensus, v2
 
 defmodule AppendEntries do
@@ -89,13 +89,22 @@ end
          end
       end
       if Enum.count(tmp) > 0 do
-         s |> Log.delete_entries_from(Enum.min(tmp))
-            |> Debug.message("-areq", "Deleting entries from #{Enum.min(tmp)}")
+         t = Log.get_entries(s, Enum.min(tmp)..Log.last_index(s))
+
+         s |> State.remove_seen_client_requests(t)
+           |> Log.delete_entries_from(Enum.min(tmp))
+           |> Debug.message("-areq", "Deleting entries from #{Enum.min(tmp)}")
       else
          s
       end
    else
       s
+   end
+   s = for entry <- m.entries, reduce: s do
+      acc ->
+         {_, value} = entry
+         {c, id} = value.cid
+         State.seen_client_requests(acc, c, id)
    end
    if valid && Enum.count(m.entries) > 0 && Enum.count(m.entries) + m.sent_from_idx - 1 > Log.last_index(s) do
       Log.merge_entries(s, m.entries)
